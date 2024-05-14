@@ -252,6 +252,7 @@ void *insert_kvs_mt_thread(void *context) {
         printf("Error: failed loading keys!\n");
         exit(1);
     }
+    return NULL;
 }
 
 void insert_kvs_mt(cuckoo_trie *trie, ct_kv **kv_pointers, uint64_t num_kvs) {
