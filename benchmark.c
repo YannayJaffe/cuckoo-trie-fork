@@ -197,6 +197,25 @@ void bench_insert(char *dataset_name, uint64_t trie_size) {
         printf("Note: %lu / %lu keys were duplicates\n", duplicates, dataset.num_keys);
 }
 
+int insert_kvs(cuckoo_trie *trie, uint8_t *kvs_buf, uint64_t num_kvs) {
+    uint64_t i;
+    int result;
+    uint8_t *buf_pos = kvs_buf;
+
+    for (i = 0; i < num_kvs; i++) {
+        ct_kv *kv = (ct_kv *) buf_pos;
+        result = ct_insert(trie, kv);
+        if (result != S_OK)
+            return result;
+        buf_pos += kv_size(kv);
+    }
+    return S_OK;
+}
+
+void bench_delete(char *dataset_name, uint64_t trie_size) {
+    printf("Error: delete not supported in CuckooTrie");
+}
+
 uint8_t *sample_keys(ct_kv **kv_pointers, uint64_t num_kvs, uint64_t sample_size, int false_queries) {
     uint64_t i;
     dynamic_buffer_t buf;
@@ -218,21 +237,6 @@ uint8_t *sample_keys(ct_kv **kv_pointers, uint64_t num_kvs, uint64_t sample_size
         memcpy(dst->bytes, kv_key_bytes(src), kv_key_size(src));
     }
     return buf.ptr;
-}
-
-int insert_kvs(cuckoo_trie *trie, uint8_t *kvs_buf, uint64_t num_kvs) {
-    uint64_t i;
-    int result;
-    uint8_t *buf_pos = kvs_buf;
-
-    for (i = 0; i < num_kvs; i++) {
-        ct_kv *kv = (ct_kv *) buf_pos;
-        result = ct_insert(trie, kv);
-        if (result != S_OK)
-            return result;
-        buf_pos += kv_size(kv);
-    }
-    return S_OK;
 }
 
 typedef struct {
@@ -547,6 +551,10 @@ bench_mw_insert_pos_lookup(char *dataset_name, uint64_t trie_size, int num_inser
            ((float) total_lookups) / time_took / 1.0e6,
            ((float) lookups_per_thread) / time_took / 1.0e6,
            time_took / ((float) lookups_per_thread) * 1.0e9);
+}
+
+void bench_mt_delete(char *dataset_name, uint64_t trie_size, int num_threads) {
+    printf("Error: delete not supported in CuckooTrie");
 }
 
 void bench_mw_insert(char *dataset_name, uint64_t trie_size, int num_threads) {
@@ -1270,6 +1278,9 @@ int main(int argc, char **argv) {
     if (!strcmp(benchmark_name, "insert")) {
         bench_insert(dataset_name, trie_cells);
         return 0;
+    } else if (!strcmp(benchmark_name, "delete")) {
+        bench_delete(dataset_name, trie_cells);
+        return 0;
     } else if (!strcmp(benchmark_name, "pos-lookup")) {
         seed_from_time();
         init_dataset(&dataset, dataset_name, dataset_size);
@@ -1315,6 +1326,9 @@ int main(int argc, char **argv) {
         return 0;
     } else if (!strcmp(benchmark_name, "mt-insert")) {
         bench_mw_insert(dataset_name, trie_cells, num_threads);
+        return 0;
+    } else if (!strcmp(benchmark_name, "mt-delete")) {
+        bench_mt_delete(dataset_name, trie_cells, num_threads);
         return 0;
     } else if (!strcmp(benchmark_name, "ycsb-a")) {
         ycsb_workload = YCSB_A_SPEC;
