@@ -197,14 +197,20 @@ void bench_insert(char *dataset_name, uint64_t trie_size) {
         printf("Note: %lu / %lu keys were duplicates\n", duplicates, dataset.num_keys);
 }
 
-uint8_t *sample_keys(ct_kv **kv_pointers, uint64_t num_kvs, uint64_t sample_size) {
+uint8_t *sample_keys(ct_kv **kv_pointers, uint64_t num_kvs, uint64_t sample_size, int false_queries) {
     uint64_t i;
     dynamic_buffer_t buf;
 
     dynamic_buffer_init(&buf);
 
     for (i = 0; i < sample_size; i++) {
-        ct_kv *src = kv_pointers[rand_uint64() % num_kvs];
+        uint64_t key_idx;
+        if (false_queries) {
+            key_idx = num_kvs - sample_size + (rand_uint64() % sample_size);
+        } else {
+            key_idx = rand_uint64() % num_kvs;
+        }
+        ct_kv *src = kv_pointers[key_idx];
         uint64_t blob_size = sizeof(blob_t) + kv_key_size(src);
         uint64_t blob_pos = dynamic_buffer_extend(&buf, blob_size);
         blob_t *dst = (blob_t *) &(buf.ptr[blob_pos]);
@@ -268,7 +274,7 @@ void insert_kvs_mt(cuckoo_trie *trie, ct_kv **kv_pointers, uint64_t num_kvs) {
     run_multiple_threads(insert_kvs_mt_thread, num_threads, thread_contexts, sizeof(insert_thread_ctx));
 }
 
-void bench_pos_lookup(dataset_t *dataset, uint64_t trie_size) {
+void bench_pos_lookup(dataset_t *dataset, uint64_t trie_size, int false_queries) {
     const uint64_t num_lookups = 10 * MILLION;
     stopwatch_t timer;
     uint64_t i;
@@ -278,15 +284,18 @@ void bench_pos_lookup(dataset_t *dataset, uint64_t trie_size) {
     cuckoo_trie *trie;
 
     build_kvs(dataset, DEFAULT_VALUE_SIZE);
-
+    uint64_t num_kvs_to_insert = dataset->num_keys;
+    if (false_queries) {
+        num_kvs_to_insert -= num_lookups;
+    }
     trie = alloc_trie(dataset, trie_size);
-    result = insert_kvs(trie, dataset->kvs, dataset->num_keys);
+    result = insert_kvs(trie, dataset->kvs, num_kvs_to_insert);
     if (result != S_OK) {
         printf("Insertion error %d\n", result);
         return;
     }
 
-    target_keys_buf = sample_keys(dataset->kv_pointers, dataset->num_keys, num_lookups);
+    target_keys_buf = sample_keys(dataset->kv_pointers, dataset->num_keys, num_lookups, false_queries);
 
     notify_critical_section_start();
     timer_start(&timer);
@@ -294,14 +303,21 @@ void bench_pos_lookup(dataset_t *dataset, uint64_t trie_size) {
     for (i = 0; i < num_lookups; i++) {
         blob_t *target = (blob_t *) buf_pos;
         ct_kv *kv = ct_lookup(trie, target->size, target->bytes);
-        if (kv == NULL) {
+        if (false_queries && kv != NULL) {
+            printf("Error: A key that wasn't inserted was found\n");
+            return;
+        } else if (!false_queries && kv == NULL) {
             printf("Error: A key that was inserted wasn't found\n");
             return;
         }
         buf_pos += sizeof(blob_t) + target->size;
         speculation_barrier();
     }
-    timer_report(&timer, num_lookups, "pos-lookup CuckooTrie");
+    if (false_queries) {
+        timer_report(&timer, num_lookups, "neg-lookup CuckooTrie");
+    } else {
+        timer_report(&timer, num_lookups, "pos-lookup CuckooTrie");
+    }
     notify_critical_section_end();
 }
 
@@ -310,6 +326,7 @@ typedef struct {
     uint64_t num_keys;
     uint8_t *target_keys;
     uint64_t keys_done;
+    int false_queries;
     int stop;
 } lookup_thread_ctx;
 
@@ -324,8 +341,13 @@ void *lookup_thread(void *context) {
     for (i = 0; i < ctx->num_keys; i++) {
         blob_t *key = (blob_t *) buf_pos;
         result = ct_lookup(ctx->trie, key->size, key->bytes);
-        if (result == NULL) {
+        if (ctx->false_queries && result != NULL) {
+            printf("Error: A key that wasn't inserted was found\n");
+            exit(1);
+            return NULL;
+        } else if (!ctx->false_queries && result == NULL) {
             printf("Error: A key that was inserted wasn't found\n");
+            exit(1);
             return NULL;
         }
         buf_pos += sizeof(blob_t) + key->size;
@@ -358,7 +380,7 @@ void *insert_thread(void *context) {
     return NULL;
 }
 
-void bench_mt_pos_lookup(char *dataset_name, uint64_t trie_size, int num_threads) {
+void bench_mt_pos_lookup(char *dataset_name, uint64_t trie_size, int num_threads, int false_queries) {
     const uint64_t lookups_per_thread = 10 * MILLION;
     stopwatch_t timer;
     uint64_t i;
@@ -375,9 +397,12 @@ void bench_mt_pos_lookup(char *dataset_name, uint64_t trie_size, int num_threads
     build_kvs(&dataset, DEFAULT_VALUE_SIZE);
 
     trie = alloc_trie(&dataset, trie_size);
-
+    uint64_t num_keys_to_load = dataset.num_keys;
+    if (false_queries) {
+        num_keys_to_load -= lookups_per_thread;
+    }
     printf("Inserting...\n");
-    insert_kvs_mt(trie, dataset.kv_pointers, dataset.num_keys);
+    insert_kvs_mt(trie, dataset.kv_pointers, num_keys_to_load);
 
     // Create thread contexts and workloads
     printf("Creating workloads...\n");
@@ -386,13 +411,20 @@ void bench_mt_pos_lookup(char *dataset_name, uint64_t trie_size, int num_threads
         ctx->trie = trie;
         ctx->num_keys = lookups_per_thread;
         ctx->stop = 0;
-        ctx->target_keys = sample_keys(dataset.kv_pointers, dataset.num_keys, lookups_per_thread);
+        ctx->false_queries = false_queries;
+        ctx->target_keys = sample_keys(dataset.kv_pointers, dataset.num_keys, lookups_per_thread, false_queries);
     }
 
     notify_critical_section_start();
     timer_start(&timer);
     run_multiple_threads(lookup_thread, num_threads, thread_contexts, sizeof(lookup_thread_ctx));
-    timer_report_mt(&timer, lookups_per_thread * num_threads, num_threads, "mt-pos-lookup CuckooTrie");
+    const char *exp_name;
+    if (false_queries) {
+        exp_name = "mt-neg-lookup CuckooTrie";
+    } else {
+        exp_name = "mt-pos-lookup CuckooTrie";
+    }
+    timer_report_mt(&timer, lookups_per_thread * num_threads, num_threads, exp_name);
     notify_critical_section_end();
 }
 
@@ -438,7 +470,8 @@ bench_mw_insert_pos_lookup(char *dataset_name, uint64_t trie_size, int num_inser
         ctx->num_keys = lookup_workload_size;
         ctx->target_keys = sample_keys(dataset.kv_pointers,
                                        dataset.num_keys - threaded_inserts,
-                                       lookup_workload_size);
+                                       lookup_workload_size, 0);
+        ctx->false_queries = 0;
         ctx->stop = 0;
 
     }
@@ -1241,12 +1274,21 @@ int main(int argc, char **argv) {
         seed_from_time();
         init_dataset(&dataset, dataset_name, dataset_size);
 
-        bench_pos_lookup(&dataset, trie_cells);
+        bench_pos_lookup(&dataset, trie_cells, 0);
+        return 0;
+    } else if (!strcmp(benchmark_name, "neg-lookup")) {
+        seed_from_time();
+        init_dataset(&dataset, dataset_name, dataset_size);
+
+        bench_pos_lookup(&dataset, trie_cells, 1);
         return 0;
     } else if (!strcmp(benchmark_name, "mt-pos-lookup")) {
-        bench_mt_pos_lookup(dataset_name, trie_cells, num_threads);
+        bench_mt_pos_lookup(dataset_name, trie_cells, num_threads, 0);
         return 0;
-    } else if (!strcmp(benchmark_name, "mw-insert-pos-lookup")) {
+    } else if (!strcmp(benchmark_name, "mt-neg-lookup")) {
+        bench_mt_pos_lookup(dataset_name, trie_cells, num_threads, 1);
+        return 0;
+    }else if (!strcmp(benchmark_name, "mw-insert-pos-lookup")) {
         bench_mw_insert_pos_lookup(dataset_name, trie_cells, num_insert_threads, num_lookup_threads);
         return 0;
     } else if (!strcmp(benchmark_name, "range-read")) {
