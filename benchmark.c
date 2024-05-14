@@ -14,7 +14,7 @@
 #define PID_NO_PROFILER 0
 #define WORKLOAD_SIZE_DYNAMIC 0
 
-#define MAX_THREADS 64
+#define MAX_THREADS 128
 
 #define MILLION 1000000
 #define DEFAULT_NUM_THREADS 4
@@ -48,20 +48,18 @@ float timer_seconds(stopwatch_t* timer) {
 	return (now.tv_sec - timer->tv_sec + (now.tv_nsec - timer->tv_nsec) / 1.0e9);
 }
 
-void timer_report(stopwatch_t* timer, uint64_t num_ops) {
+void timer_report(stopwatch_t* timer, uint64_t num_ops, const char* exp_name) {
 	float time_diff = timer_seconds(timer);
-
-	printf("Took %.2fs for %lu ops (%.0fns/op, %.2fMops/s)\n", time_diff, num_ops,
-		   (time_diff / num_ops) * 1.0e9,
-		   (num_ops / time_diff) / 1.0e6);
+    printf("Experiment: %s\n", exp_name);
+	printf("Took %.2fs (%.0fns/key)\n", time_diff, (time_diff / num_ops) * 1.0e9);
 
     // print a line in machine-readable format for automatic graph creation
     printf("RESULT: ops=%lu ms=%d\n", num_ops, (int)(time_diff*1000));
 }
 
-void timer_report_mt(stopwatch_t* timer, uint64_t num_ops, int num_threads) {
+void timer_report_mt(stopwatch_t* timer, uint64_t num_ops, int num_threads, const char* exp_name) {
 	float time_diff = timer_seconds(timer);
-
+    printf("Experiment: %s\n", exp_name);
 	printf("Took %.2fs for %lu ops in %d threads (%.0fns/op, %.2fMops/s per thread)\n",
 		   time_diff, num_ops, num_threads,
 		   (time_diff / num_ops * num_threads) * 1.0e9,
@@ -186,7 +184,7 @@ void bench_insert(char* dataset_name, uint64_t trie_size) {
 		buf_pos += kv_size(kv);
 		speculation_barrier();
 	}
-	timer_report(&timer, dataset.num_keys);
+	timer_report(&timer, dataset.num_keys, "insert CuckooTrie");
 	if (duplicates > 0)
 		printf("Note: %lu / %lu keys were duplicates\n", duplicates, dataset.num_keys);
 }
@@ -256,7 +254,7 @@ void bench_pos_lookup(dataset_t* dataset, uint64_t trie_size) {
 		buf_pos += sizeof(blob_t) + target->size;
 		speculation_barrier();
 	}
-	timer_report(&timer, num_lookups);
+	timer_report(&timer, num_lookups, "pos-lookup CuckooTrie");
 	notify_critical_section_end();
 }
 
@@ -612,7 +610,7 @@ void bench_range_from_key(char* dataset_name, uint64_t trie_size, range_func_t r
 	notify_critical_section_start();
 	timer_start(&timer);
 	range_func(trie, num_ranges, range_size, &dataset);
-	timer_report(&timer, num_ranges);
+	timer_report(&timer, num_ranges, "range-from-key CuckooTrie");
 
 }
 
@@ -1087,7 +1085,8 @@ int generate_ycsb_workload(dataset_t* dataset, ycsb_workload* workload,
 	return 1;
 }
 
-void bench_ycsb(char* dataset_name, uint64_t trie_size, const ycsb_workload_spec* base_spec, int num_threads) {
+void bench_ycsb(char* dataset_name, uint64_t trie_size, const ycsb_workload_spec* base_spec, int num_threads,
+                int is_ycsb_single_thread, const char* ycsb_exp_name) {
 	uint64_t i;
 	int result;
 	ycsb_thread_ctx thread_contexts[num_threads];
@@ -1124,7 +1123,11 @@ void bench_ycsb(char* dataset_name, uint64_t trie_size, const ycsb_workload_spec
 	notify_critical_section_start();
 	timer_start(&timer);
 	run_multiple_threads(ycsb_thread, num_threads, thread_contexts, sizeof(ycsb_thread_ctx));
-	timer_report_mt(&timer, spec.num_ops * num_threads, num_threads);
+	if (is_ycsb_single_thread){
+        timer_report(&timer, spec.num_ops, ycsb_exp_name);
+	} else {
+        timer_report_mt(&timer, spec.num_ops * num_threads, num_threads, ycsb_exp_name);
+    }
 }
 
 int main(int argc, char** argv) {
@@ -1140,6 +1143,9 @@ int main(int argc, char** argv) {
 	int use_uniform_dist = 0;
 	uint64_t total_ycsb_ops = WORKLOAD_SIZE_DYNAMIC;
 	ycsb_workload_spec ycsb_workload;
+	int is_ycsb_single_thread = 0;
+    int is_ycsb = 0;
+    const char* ycsb_exp_name;
 
 	if (argc < 3) {
 		printf("Usage: %s <benchmark name> [options] <dataset>.\n", argv[0]);
@@ -1225,48 +1231,85 @@ int main(int argc, char** argv) {
 	}
 	else if (!strcmp(benchmark_name, "ycsb-a")) {
 		ycsb_workload = YCSB_A_SPEC;
+		is_ycsb = 1;
+		ycsb_exp_name = "ycsb-a CuckooTrie";
 		num_threads = 1;
+		is_ycsb_single_thread = 1;
 	} else if (!strcmp(benchmark_name, "ycsb-b")) {
 		ycsb_workload = YCSB_B_SPEC;
+        is_ycsb = 1;
+        ycsb_exp_name = "ycsb-b CuckooTrie";
 		num_threads = 1;
-	} else if (!strcmp(benchmark_name, "ycsb-c")) {
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-c")) {
 		ycsb_workload = YCSB_C_SPEC;
+        is_ycsb = 1;
+        ycsb_exp_name = "ycsb-c CuckooTrie";
 		num_threads = 1;
-	} else if (!strcmp(benchmark_name, "ycsb-d")) {
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-d")) {
 		ycsb_workload = YCSB_D_SPEC;
+        is_ycsb = 1;
+        ycsb_exp_name = "ycsb-d CuckooTrie";
 		num_threads = 1;
-	} else if (!strcmp(benchmark_name, "ycsb-e")) {
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-e")) {
 		ycsb_workload = YCSB_E_SPEC;
+        is_ycsb = 1;
+        ycsb_exp_name = "ycsb-e CuckooTrie";
 		num_threads = 1;
-	} else if (!strcmp(benchmark_name, "ycsb-f")) {
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-f")) {
 		ycsb_workload = YCSB_F_SPEC;
+        is_ycsb = 1;
+        ycsb_exp_name = "ycsb-f CuckooTrie";
 		num_threads = 1;
-	} else if (!strcmp(benchmark_name, "mt-ycsb-a")) {
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "mt-ycsb-a")) {
 		ycsb_workload = YCSB_A_SPEC;
-	} else if (!strcmp(benchmark_name, "mt-ycsb-b")) {
+        is_ycsb = 1;
+        ycsb_exp_name = "mt-ycsb-a CuckooTrie";
+        is_ycsb_single_thread = 0;
+    } else if (!strcmp(benchmark_name, "mt-ycsb-b")) {
 		ycsb_workload = YCSB_B_SPEC;
+        is_ycsb = 1;
+        ycsb_exp_name = "mt-ycsb-b CuckooTrie";
+        is_ycsb_single_thread = 0;
 	} else if (!strcmp(benchmark_name, "mt-ycsb-c")) {
 		ycsb_workload = YCSB_C_SPEC;
+        is_ycsb = 1;
+        ycsb_exp_name = "mt-ycsb-c CuckooTrie";
+        is_ycsb_single_thread = 0;
 	} else if (!strcmp(benchmark_name, "mt-ycsb-d")) {
 		ycsb_workload = YCSB_D_SPEC;
+        is_ycsb = 1;
+        ycsb_exp_name = "mt-ycsb-d CuckooTrie";
+        is_ycsb_single_thread = 0;
 	} else if (!strcmp(benchmark_name, "mt-ycsb-e")) {
 		ycsb_workload = YCSB_E_SPEC;
+        is_ycsb = 1;
+        ycsb_exp_name = "mt-ycsb-e CuckooTrie";
+        is_ycsb_single_thread = 0;
 	} else if (!strcmp(benchmark_name, "mt-ycsb-f")) {
 		ycsb_workload = YCSB_F_SPEC;
+        is_ycsb = 1;
+        ycsb_exp_name = "mt-ycsb-f CuckooTrie";
+        is_ycsb_single_thread = 0;
 	} else {
 		printf("Unknown benchmark name\n");
 		return 1;
 	}
+    if(is_ycsb){
+        // Handle YCSB benchmarks
+        if (use_uniform_dist)
+            ycsb_workload.distribution = YCSB_UNIFORM;
 
-	// Handle YCSB benchmarks
-	if (use_uniform_dist)
-		ycsb_workload.distribution = YCSB_UNIFORM;
-
-	if (total_ycsb_ops != WORKLOAD_SIZE_DYNAMIC) {
-		// Don't scale the total workload size based on number of threads
-		ycsb_workload.num_ops = total_ycsb_ops / num_threads;
-	}
-	bench_ycsb(dataset_name, trie_cells, &ycsb_workload, num_threads);
+        if (total_ycsb_ops != WORKLOAD_SIZE_DYNAMIC) {
+            // Don't scale the total workload size based on number of threads
+            ycsb_workload.num_ops = total_ycsb_ops / num_threads;
+        }
+        bench_ycsb(dataset_name, trie_cells, &ycsb_workload, num_threads);
+    }
 
 	return 0;
 }
