@@ -1149,11 +1149,10 @@ int generate_ycsb_workload(dataset_t *dataset, ycsb_workload *workload,
 
     // Create the read-latest key blocks
     uint64_t block;
-//    uint64_t thread;
-//    for (thread = 0; thread < num_threads; thread++) {
+    uint64_t thread;
+    for (thread = 0; thread < num_threads; thread++) {
         uint8_t **block_offsets = malloc(sizeof(uint64_t) * (num_inserts + 1));
-//        workload->read_latest_blocks_for_thread[thread] = block_offsets;
-        workload->read_latest_blocks_for_thread[thread_id] = block_offsets;
+        workload->read_latest_blocks_for_thread[thread] = block_offsets;
 
         // We have one block for each amount of inserts between 0 and num_inserts, /inclusive/
         for (block = 0; block < num_inserts + 1; block++) {
@@ -1189,12 +1188,11 @@ int generate_ycsb_workload(dataset_t *dataset, ycsb_workload *workload,
     workload->data_buf = workload_buf.ptr;
 
     // Now that the final buffer address is known, convert the read-latest offsets to pointers
-//    for (thread = 0; thread < num_threads; thread++) {
+    for (thread = 0; thread < num_threads; thread++) {
         for (block = 0; block < num_inserts + 1; block++) {
-//            workload->read_latest_blocks_for_thread[thread][block] += (uintptr_t) (workload->data_buf);
-            workload->read_latest_blocks_for_thread[thread_id][block] += (uintptr_t) (workload->data_buf);
+            workload->read_latest_blocks_for_thread[thread][block] += (uintptr_t) (workload->data_buf);
         }
-//    }
+    }
     return 1;
 }
 
