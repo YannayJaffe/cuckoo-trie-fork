@@ -30,6 +30,11 @@ float rand_float() {
 	return ((float)rand_dword()) / UINT32_MAX;
 }
 
+float rand_float_r(uint64_t* state) {
+    return ((float)rand_dword_r(state)) / UINT32_MAX;
+}
+
+
 void random_bytes(uint8_t* buf, int count) {
 	int i;
 	for (i = 0;i < count;i++)

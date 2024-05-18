@@ -35,6 +35,7 @@ uint32_t rand_dword_r(uint64_t* state);
 uint64_t rand_uint64();
 uint64_t rand_uint64_r(uint64_t* state);
 float rand_float();
+float rand_float_r(uint64_t* state);
 void rand_uniform_init(rand_distribution* dist, uint64_t max);
 void rand_zipf_init(rand_distribution* dist, uint64_t max, double skew);
 void rand_zipf_rank_init(rand_distribution* dist, uint64_t max, double skew);
