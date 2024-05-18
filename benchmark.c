@@ -1183,7 +1183,7 @@ int generate_ycsb_workload(dataset_t *dataset, ycsb_workload *workload,
             blob_t *sentinel = (blob_t *) (workload_buf.ptr + sentinel_pos);
             sentinel->size = 0xFFFFFFFF;
         }
-//    }
+    }
 
     workload->data_buf = workload_buf.ptr;
 
