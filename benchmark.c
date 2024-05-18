@@ -385,12 +385,27 @@ void *insert_thread(void *context) {
     return NULL;
 }
 
+struct prepare_lookups_workloads_context{
+    lookup_thread_ctx *out_ctx;
+    ct_kv **kvs;
+    uint64_t num_keys;
+    uint64_t num_lookups;
+    int false_queries;
+};
+
+void* prepare_lookup_workloads_thread(void* arg) {
+    struct prepare_lookups_workloads_context* ctx = (struct prepare_lookups_workloads_context*)arg;
+    ctx->out_ctx->target_keys = sample_keys(ctx->kvs, ctx->num_keys, ctx->num_lookups, ctx->false_queries);
+    ctx->out_ctx->num_keys = ctx->num_lookups;
+}
+
 void bench_mt_pos_lookup(char *dataset_name, uint64_t trie_size, int num_threads, int false_queries) {
     const uint64_t lookups_per_thread = 10 * MILLION;
     stopwatch_t timer;
     uint64_t i;
     dataset_t dataset;
     uint8_t *buf_pos;
+    struct prepare_lookups_workloads_context prepare_contexts[num_threads];
     lookup_thread_ctx thread_contexts[num_threads];
 
     cuckoo_trie *trie;
@@ -414,11 +429,15 @@ void bench_mt_pos_lookup(char *dataset_name, uint64_t trie_size, int num_threads
     for (i = 0; i < num_threads; i++) {
         lookup_thread_ctx *ctx = &(thread_contexts[i]);
         ctx->trie = trie;
-        ctx->num_keys = lookups_per_thread;
         ctx->stop = 0;
         ctx->false_queries = false_queries;
-        ctx->target_keys = sample_keys(dataset.kv_pointers, dataset.num_keys, lookups_per_thread, false_queries);
+        prepare_contexts[i].num_lookups = lookups_per_thread;
+        prepare_contexts[i].false_queries = false_queries;
+        prepare_contexts[i].num_keys = dataset.num_keys;
+        prepare_contexts[i].kvs = dataset.kv_pointers;
+        prepare_contexts[i].out_ctx = ctx;
     }
+    run_multiple_threads(prepare_lookup_workloads_thread, num_threads, prepare_contexts, sizeof(struct prepare_lookups_workloads_context));
 
     notify_critical_section_start();
     timer_start(&timer);
