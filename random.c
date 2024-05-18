@@ -22,6 +22,10 @@ uint64_t rand_uint64() {
 	return (((uint64_t)rand_dword()) << 32) + rand_dword();
 }
 
+uint64_t rand_uint64_r(uint64_t* state) {
+    return (((uint64_t)rand_dword_r(state)) << 32) + rand_dword_r(state);
+}
+
 float rand_float() {
 	return ((float)rand_dword()) / UINT32_MAX;
 }
@@ -40,6 +44,16 @@ long int seed_from_time() {
 	rand_seed(seed);
 	return seed;
 }
+
+long int seed_from_time_r(long int thread_id) {
+    struct timeval now;
+    long int seed;
+    gettimeofday(&now, NULL);
+    seed = thread_id * 10000000 + now.tv_sec * 1000000 + now.tv_usec;
+    printf("Thread %ld Using seed %ld\n", thread_id, seed);
+    return seed;
+}
+
 
 void seed_and_print() {
 	printf("Using seed %ld\n", seed_from_time());
