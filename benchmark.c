@@ -1243,7 +1243,7 @@ void bench_ycsb(char *dataset_name, uint64_t trie_size, const ycsb_workload_spec
 
     trie = alloc_trie(&dataset, trie_size);
 
-    printf("Creating workloads");
+    printf("Creating workloads\n");
     for (i = 0; i < num_threads; i++) {
         thread_contexts[i].trie = trie;
         thread_contexts[i].thread_id = i;
