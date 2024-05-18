@@ -1230,7 +1230,7 @@ void generate_mt_ycsb_workload(ycsb_thread_ctx *benchmark_inner_thread_contexts,
         prepare_workload_inner_contexts[i].workload = &(benchmark_inner_thread_contexts[i].workload);
         prepare_workload_inner_contexts[i].spec = spec;
         prepare_workload_inner_contexts[i].random_state = &(benchmark_inner_thread_contexts[i].random_state);
-        prepare_workload_inner_contexts[i].thread_id = i;
+        prepare_workload_inner_contexts[i].thread_id = (int)benchmark_inner_thread_contexts[i].thread_id;
         prepare_workload_inner_contexts[i].num_threads = num_threads;
     }
     run_multiple_threads(generate_ycsb_workload_wrapper, num_threads, prepare_workload_inner_contexts, sizeof(prepare_workload_inner_contexts[0]));
