@@ -216,7 +216,7 @@ void bench_delete(char *dataset_name, uint64_t trie_size) {
     printf("Error: delete not supported in CuckooTrie");
 }
 
-uint8_t *sample_keys(ct_kv **kv_pointers, uint64_t num_kvs, uint64_t sample_size, int false_queries) {
+uint8_t *sample_keys(ct_kv **kv_pointers, uint64_t num_kvs, uint64_t sample_size, int false_queries, uint64_t* thread_rand_state) {
     uint64_t i;
     dynamic_buffer_t buf;
 
@@ -224,10 +224,16 @@ uint8_t *sample_keys(ct_kv **kv_pointers, uint64_t num_kvs, uint64_t sample_size
 
     for (i = 0; i < sample_size; i++) {
         uint64_t key_idx;
-        if (false_queries) {
-            key_idx = num_kvs - sample_size + (rand_uint64() % sample_size);
+        uint64_t rand_num;
+        if(thread_rand_state == NULL){
+            rand_num = rand_uint64();
         } else {
-            key_idx = rand_uint64() % num_kvs;
+            rand_num = rand_uint64_r(thread_rand_state);
+        }
+        if (false_queries) {
+            key_idx = num_kvs - sample_size + (rand_num % sample_size);
+        } else {
+            key_idx = rand_num % num_kvs;
         }
         ct_kv *src = kv_pointers[key_idx];
         uint64_t blob_size = sizeof(blob_t) + kv_key_size(src);
@@ -300,7 +306,7 @@ void bench_pos_lookup(dataset_t *dataset, uint64_t trie_size, int false_queries)
         return;
     }
 
-    target_keys_buf = sample_keys(dataset->kv_pointers, dataset->num_keys, num_lookups, false_queries);
+    target_keys_buf = sample_keys(dataset->kv_pointers, dataset->num_keys, num_lookups, false_queries, NULL);
 
     notify_critical_section_start();
     timer_start(&timer);
@@ -391,11 +397,13 @@ struct prepare_lookups_workloads_context{
     uint64_t num_keys;
     uint64_t num_lookups;
     int false_queries;
+    int thread_id;
 };
 
 void* prepare_lookup_workloads_thread(void* arg) {
     struct prepare_lookups_workloads_context* ctx = (struct prepare_lookups_workloads_context*)arg;
-    ctx->out_ctx->target_keys = sample_keys(ctx->kvs, ctx->num_keys, ctx->num_lookups, ctx->false_queries);
+    uint64_t thread_rand_state = seed_from_time_r(ctx->thread_id);
+    ctx->out_ctx->target_keys = sample_keys(ctx->kvs, ctx->num_keys, ctx->num_lookups, ctx->false_queries, &thread_rand_state);
     ctx->out_ctx->num_keys = ctx->num_lookups;
     return NULL;
 }
@@ -437,6 +445,7 @@ void bench_mt_pos_lookup(char *dataset_name, uint64_t trie_size, int num_threads
         prepare_contexts[i].num_keys = dataset.num_keys;
         prepare_contexts[i].kvs = dataset.kv_pointers;
         prepare_contexts[i].out_ctx = ctx;
+        prepare_contexts[i].thread_id = i;
     }
     run_multiple_threads(prepare_lookup_workloads_thread, num_threads, prepare_contexts, sizeof(struct prepare_lookups_workloads_context));
 
@@ -495,7 +504,7 @@ bench_mw_insert_pos_lookup(char *dataset_name, uint64_t trie_size, int num_inser
         ctx->num_keys = lookup_workload_size;
         ctx->target_keys = sample_keys(dataset.kv_pointers,
                                        dataset.num_keys - threaded_inserts,
-                                       lookup_workload_size, 0);
+                                       lookup_workload_size, 0, NULL);
         ctx->false_queries = 0;
         ctx->stop = 0;
 
