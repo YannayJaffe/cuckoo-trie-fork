@@ -1256,13 +1256,14 @@ void bench_ycsb(char *dataset_name, uint64_t trie_size, const ycsb_workload_spec
         thread_contexts[i].random_state = seed_from_time_r(i);
     }
     generate_mt_ycsb_workload(thread_contexts, &dataset, &spec, num_threads);
-    printf("\n");
+    printf("\nInserting keys\n");
 
     if (is_ycsb_single_thread) {
         insert_kvs(trie, dataset.kvs, thread_contexts[0].workload.initial_num_keys);
     } else {
         insert_kvs_mt(trie, dataset.kv_pointers, thread_contexts[0].workload.initial_num_keys);
     }
+    printf("Running benchmark\n");
     notify_critical_section_start();
     timer_start(&timer);
     run_multiple_threads(ycsb_thread, num_threads, thread_contexts, sizeof(ycsb_thread_ctx));
