@@ -15,7 +15,7 @@
 #define PID_NO_PROFILER 0
 #define WORKLOAD_SIZE_DYNAMIC 0
 
-#define MAX_THREADS 128
+#define MAX_THREADS 88
 
 #define MILLION 1000000
 #define DEFAULT_NUM_THREADS 4
@@ -397,6 +397,7 @@ void* prepare_lookup_workloads_thread(void* arg) {
     struct prepare_lookups_workloads_context* ctx = (struct prepare_lookups_workloads_context*)arg;
     ctx->out_ctx->target_keys = sample_keys(ctx->kvs, ctx->num_keys, ctx->num_lookups, ctx->false_queries);
     ctx->out_ctx->num_keys = ctx->num_lookups;
+    return NULL;
 }
 
 void bench_mt_pos_lookup(char *dataset_name, uint64_t trie_size, int num_threads, int false_queries) {
@@ -858,13 +859,19 @@ typedef struct ycsb_thread_ctx_t {
     uint64_t num_threads;
     uint64_t inserts_done;
     struct ycsb_thread_ctx_t *thread_contexts;
+    uint64_t random_state;
     ycsb_workload workload;
 } ycsb_thread_ctx;
 
-int choose_ycsb_op_type(const float *op_probs) {
+int choose_ycsb_op_type(const float *op_probs, uint64_t* random_state) {
     uint64_t i;
     float sum = 0.0;
-    float rand = rand_float();
+    float rand;
+    if(random_state == NULL){
+        rand = rand_float();
+    } else {
+        rand = rand_float_r(random_state);
+    }
     for (i = 0; i < YCSB_NUM_OP_TYPES; i++) {
         sum += op_probs[i];
         if (sum > 1.00001) {
@@ -1009,7 +1016,7 @@ void *ycsb_thread(void *arg) {
 
             case YCSB_SCAN:
                 key = (blob_t *) &(ctx->workload.data_buf[op->data_pos]);
-                range_size = (rand_dword() % 100) + 1;
+                range_size = (rand_dword_r(&ctx->random_state) % 100) + 1;
 
                 uint64_t checksum = 0;
                 ct_iter_goto(iter, key->size, key->bytes);
@@ -1038,7 +1045,7 @@ void *ycsb_thread(void *arg) {
 
 int generate_ycsb_workload(dataset_t *dataset, ycsb_workload *workload,
                            const ycsb_workload_spec *spec, int thread_id,
-                           int num_threads) {
+                           int num_threads, uint64_t* random_state) {
     uint64_t i;
     int data_size;
     ct_kv *kv;
@@ -1094,7 +1101,7 @@ int generate_ycsb_workload(dataset_t *dataset, ycsb_workload *workload,
     dynamic_buffer_init(&workload_buf);
     for (i = 0; i < spec->num_ops; i++) {
         ycsb_op *op = &(workload->ops[i]);
-        op->type = choose_ycsb_op_type(spec->op_type_probs);
+        op->type = choose_ycsb_op_type(spec->op_type_probs, random_state);
 
         if (num_inserts == inserts_per_thread && op->type == YCSB_INSERT) {
             // Used all keys intended for insertion. Do another op type.
@@ -1105,7 +1112,7 @@ int generate_ycsb_workload(dataset_t *dataset, ycsb_workload *workload,
         switch (op->type) {
             case YCSB_READ:
             case YCSB_SCAN:
-                kv = dataset->kv_pointers[rand_dist(&dist)];
+                kv = dataset->kv_pointers[rand_dist(&dist, random_state)];
                 data_size = sizeof(blob_t) + kv_key_size(kv);
                 op->data_pos = dynamic_buffer_extend(&workload_buf, data_size);
 
@@ -1120,7 +1127,7 @@ int generate_ycsb_workload(dataset_t *dataset, ycsb_workload *workload,
 
             case YCSB_RMW:
             case YCSB_UPDATE:
-                kv = dataset->kv_pointers[rand_dist(&dist)];
+                kv = dataset->kv_pointers[rand_dist(&dist, random_state)];
                 op->data_pos = dynamic_buffer_extend(&workload_buf, kv_size(kv));
 
                 memcpy(workload_buf.ptr + op->data_pos, kv, kv_size(kv));
@@ -1150,7 +1157,7 @@ int generate_ycsb_workload(dataset_t *dataset, ycsb_workload *workload,
         // We have one block for each amount of inserts between 0 and num_inserts, /inclusive/
         for (block = 0; block < num_inserts + 1; block++) {
             for (i = 0; i < read_latest_block_size; i++) {
-                uint64_t backwards = rand_dist(&backward_dist);
+                uint64_t backwards = rand_dist(&backward_dist, random_state);
                 if (backwards < block * num_threads) {
                     // This read-latest op refers to a key that was inserted during the workload
                     backwards /= num_threads;
@@ -1188,6 +1195,37 @@ int generate_ycsb_workload(dataset_t *dataset, ycsb_workload *workload,
     return 1;
 }
 
+struct prepare_mt_ycsb_workload_context {
+    dataset_t *dataset;
+    ycsb_workload *workload;
+    const ycsb_workload_spec *spec;
+    uint64_t *random_state;
+    int num_threads;
+    int thread_id;
+};
+
+void* generate_ycsb_workload_wrapper(void* arg){
+    struct prepare_mt_ycsb_workload_context *ctx = (struct prepare_mt_ycsb_workload_context *)arg;
+    if(!generate_ycsb_workload(ctx->dataset, ctx->workload, ctx->spec, ctx->thread_id, ctx->num_threads, ctx->random_state)){
+        printf("Error: failed to generate the ycsb workload!\n");
+        exit(1);
+    }
+    return NULL;
+}
+
+void generate_mt_ycsb_workload(ycsb_thread_ctx *benchmark_inner_thread_contexts, dataset_t* dataset, const ycsb_workload_spec *spec, int num_threads){
+    struct prepare_mt_ycsb_workload_context prepare_workload_inner_contexts[num_threads];
+    for (int i=0; i<num_threads; i++){
+        prepare_workload_inner_contexts[i].dataset = dataset;
+        prepare_workload_inner_contexts[i].workload = &(benchmark_inner_thread_contexts[i].workload);
+        prepare_workload_inner_contexts[i].spec = spec;
+        prepare_workload_inner_contexts[i].random_state = &(benchmark_inner_thread_contexts[i].random_state);
+        prepare_workload_inner_contexts[i].thread_id = i;
+        prepare_workload_inner_contexts[i].num_threads = num_threads;
+    }
+    run_multiple_threads(generate_ycsb_workload_wrapper, num_threads, prepare_workload_inner_contexts, sizeof(prepare_workload_inner_contexts[0]));
+}
+
 void bench_ycsb(char *dataset_name, uint64_t trie_size, const ycsb_workload_spec *base_spec, int num_threads,
                 int is_ycsb_single_thread, const char *ycsb_exp_name) {
     uint64_t i;
@@ -1207,19 +1245,14 @@ void bench_ycsb(char *dataset_name, uint64_t trie_size, const ycsb_workload_spec
 
     printf("Creating workloads");
     for (i = 0; i < num_threads; i++) {
-        result = generate_ycsb_workload(&dataset, &(thread_contexts[i].workload), &spec, i, num_threads);
-        if (!result) {
-            printf("Error creating workload\n");
-            return;
-        }
         thread_contexts[i].trie = trie;
         thread_contexts[i].thread_id = i;
         thread_contexts[i].num_threads = num_threads;
         thread_contexts[i].thread_contexts = thread_contexts;
         thread_contexts[i].inserts_done = 0;
-        printf(".");
-        fflush(stdout);
+        thread_contexts[i].random_state = seed_from_time_r(i);
     }
+    generate_mt_ycsb_workload(thread_contexts, &dataset, &spec, num_threads);
     printf("\n");
 
     if (is_ycsb_single_thread) {
