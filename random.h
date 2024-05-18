@@ -33,12 +33,14 @@ typedef struct {
 uint32_t rand_dword();
 uint32_t rand_dword_r(uint64_t* state);
 uint64_t rand_uint64();
+uint64_t rand_uint64_r(uint64_t* state);
 float rand_float();
 void rand_uniform_init(rand_distribution* dist, uint64_t max);
 void rand_zipf_init(rand_distribution* dist, uint64_t max, double skew);
 void rand_zipf_rank_init(rand_distribution* dist, uint64_t max, double skew);
-uint64_t rand_dist(rand_distribution* dist);
+uint64_t rand_dist(rand_distribution* dist, uint64_t* state);
 void random_bytes(uint8_t* buf, int count);
 void rand_seed(uint64_t s);
 long int seed_from_time();
+long int seed_from_time_r(long int thread_id);
 void seed_and_print();
