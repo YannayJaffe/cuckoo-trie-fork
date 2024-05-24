@@ -1394,71 +1394,148 @@ int main(int argc, char **argv) {
     } else if (!strcmp(benchmark_name, "mt-delete")) {
         bench_mt_delete(dataset_name, trie_cells, num_threads);
         return 0;
-    } else if (!strcmp(benchmark_name, "ycsb-a")) {
+    } else if (!strcmp(benchmark_name, "ycsb-a-zipf")) {
+        ycsb_exp_name = "ycsb-a-zipf CuckooTrie";
         ycsb_workload = YCSB_A_SPEC;
+        ycsb_workload.distribution = DIST_ZIPF;
         is_ycsb = 1;
-        ycsb_exp_name = "ycsb-a CuckooTrie";
         num_threads = 1;
         is_ycsb_single_thread = 1;
-    } else if (!strcmp(benchmark_name, "ycsb-b")) {
-        ycsb_workload = YCSB_B_SPEC;
-        is_ycsb = 1;
-        ycsb_exp_name = "ycsb-b CuckooTrie";
-        num_threads = 1;
-        is_ycsb_single_thread = 1;
-    } else if (!strcmp(benchmark_name, "ycsb-c")) {
-        ycsb_workload = YCSB_C_SPEC;
-        is_ycsb = 1;
-        ycsb_exp_name = "ycsb-c CuckooTrie";
-        num_threads = 1;
-        is_ycsb_single_thread = 1;
-    } else if (!strcmp(benchmark_name, "ycsb-d")) {
-        ycsb_workload = YCSB_D_SPEC;
-        is_ycsb = 1;
-        ycsb_exp_name = "ycsb-d CuckooTrie";
-        num_threads = 1;
-        is_ycsb_single_thread = 1;
-    } else if (!strcmp(benchmark_name, "ycsb-e")) {
-        ycsb_workload = YCSB_E_SPEC;
-        is_ycsb = 1;
-        ycsb_exp_name = "ycsb-e CuckooTrie";
-        num_threads = 1;
-        is_ycsb_single_thread = 1;
-    } else if (!strcmp(benchmark_name, "ycsb-f")) {
-        ycsb_workload = YCSB_F_SPEC;
-        is_ycsb = 1;
-        ycsb_exp_name = "ycsb-f CuckooTrie";
-        num_threads = 1;
-        is_ycsb_single_thread = 1;
-    } else if (!strcmp(benchmark_name, "mt-ycsb-a")) {
+    } else if (!strcmp(benchmark_name, "ycsb-a-uniform")) {
+        ycsb_exp_name = "ycsb-a-uniform CuckooTrie";
         ycsb_workload = YCSB_A_SPEC;
+        ycsb_workload.distribution = DIST_UNIFORM;
         is_ycsb = 1;
-        ycsb_exp_name = "mt-ycsb-a CuckooTrie";
-        is_ycsb_single_thread = 0;
-    } else if (!strcmp(benchmark_name, "mt-ycsb-b")) {
+        num_threads = 1;
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-b-zipf")) {
+        ycsb_exp_name = "ycsb-b-zipf CuckooTrie";
         ycsb_workload = YCSB_B_SPEC;
+        ycsb_workload.distribution = DIST_ZIPF;
         is_ycsb = 1;
-        ycsb_exp_name = "mt-ycsb-b CuckooTrie";
-        is_ycsb_single_thread = 0;
-    } else if (!strcmp(benchmark_name, "mt-ycsb-c")) {
+        num_threads = 1;
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-b-uniform")) {
+        ycsb_exp_name = "ycsb-b-uniform CuckooTrie";
+        ycsb_workload = YCSB_B_SPEC;
+        ycsb_workload.distribution = DIST_UNIFORM;
+        is_ycsb = 1;
+        num_threads = 1;
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-c-zipf")) {
+        ycsb_exp_name = "ycsb-c-zipf CuckooTrie";
         ycsb_workload = YCSB_C_SPEC;
+        ycsb_workload.distribution = DIST_ZIPF;
         is_ycsb = 1;
-        ycsb_exp_name = "mt-ycsb-c CuckooTrie";
-        is_ycsb_single_thread = 0;
-    } else if (!strcmp(benchmark_name, "mt-ycsb-d")) {
+        num_threads = 1;
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-c-uniform")) {
+        ycsb_exp_name = "ycsb-c-uniform CuckooTrie";
+        ycsb_workload = YCSB_C_SPEC;
+        ycsb_workload.distribution = DIST_UNIFORM;
+        is_ycsb = 1;
+        num_threads = 1;
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-d-zipf")) {
+        ycsb_exp_name = "ycsb-d-zipf CuckooTrie";
         ycsb_workload = YCSB_D_SPEC;
+        ycsb_workload.distribution = DIST_ZIPF;
         is_ycsb = 1;
-        ycsb_exp_name = "mt-ycsb-d CuckooTrie";
-        is_ycsb_single_thread = 0;
-    } else if (!strcmp(benchmark_name, "mt-ycsb-e")) {
+        num_threads = 1;
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-e-zipf")) {
+        ycsb_exp_name = "ycsb-e-zipf CuckooTrie";
         ycsb_workload = YCSB_E_SPEC;
+        ycsb_workload.distribution = DIST_ZIPF;
         is_ycsb = 1;
-        ycsb_exp_name = "mt-ycsb-e CuckooTrie";
-        is_ycsb_single_thread = 0;
-    } else if (!strcmp(benchmark_name, "mt-ycsb-f")) {
+        num_threads = 1;
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-e-uniform")) {
+        ycsb_exp_name = "ycsb-e-uniform CuckooTrie";
+        ycsb_workload = YCSB_E_SPEC;
+        ycsb_workload.distribution = DIST_UNIFORM;
+        is_ycsb = 1;
+        num_threads = 1;
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-f-zipf")) {
+        ycsb_exp_name = "ycsb-f-zipf CuckooTrie";
         ycsb_workload = YCSB_F_SPEC;
+        ycsb_workload.distribution = DIST_ZIPF;
         is_ycsb = 1;
-        ycsb_exp_name = "mt-ycsb-f CuckooTrie";
+        num_threads = 1;
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "ycsb-f-uniform")) {
+        ycsb_exp_name = "ycsb-f-uniform CuckooTrie";
+        ycsb_workload = YCSB_F_SPEC;
+        ycsb_workload.distribution = DIST_UNIFORM;
+        is_ycsb = 1;
+        num_threads = 1;
+        is_ycsb_single_thread = 1;
+    } else if (!strcmp(benchmark_name, "mt-ycsb-a-zipf")) {
+        ycsb_exp_name = "mt-ycsb-a-zipf CuckooTrie";
+        ycsb_workload = YCSB_A_SPEC;
+        ycsb_workload.distribution = DIST_ZIPF;
+        is_ycsb = 1;
+        is_ycsb_single_thread = 0;
+    } else if (!strcmp(benchmark_name, "mt-ycsb-a-uniform")) {
+        ycsb_exp_name = "mt-ycsb-a-uniform CuckooTrie";
+        ycsb_workload = YCSB_A_SPEC;
+        ycsb_workload.distribution = DIST_UNIFORM;
+        is_ycsb = 1;
+        is_ycsb_single_thread = 0;
+    } else if (!strcmp(benchmark_name, "mt-ycsb-b-zipf")) {
+        ycsb_exp_name = "mt-ycsb-b-zipf CuckooTrie";
+        ycsb_workload = YCSB_B_SPEC;
+        ycsb_workload.distribution = DIST_ZIPF;
+        is_ycsb = 1;
+        is_ycsb_single_thread = 0;
+    } else if (!strcmp(benchmark_name, "mt-ycsb-b-uniform")) {
+        ycsb_exp_name = "mt-ycsb-b-uniform CuckooTrie";
+        ycsb_workload = YCSB_B_SPEC;
+        ycsb_workload.distribution = DIST_UNIFORM;
+        is_ycsb = 1;
+        is_ycsb_single_thread = 0;
+    } else if (!strcmp(benchmark_name, "mt-ycsb-c-zipf")) {
+        ycsb_exp_name = "mt-ycsb-c-zipf CuckooTrie";
+        ycsb_workload = YCSB_C_SPEC;
+        ycsb_workload.distribution = DIST_ZIPF;
+        is_ycsb = 1;
+        is_ycsb_single_thread = 0;
+    } else if (!strcmp(benchmark_name, "mt-ycsb-c-uniform")) {
+        ycsb_exp_name = "mt-ycsb-c-uniform CuckooTrie";
+        ycsb_workload = YCSB_C_SPEC;
+        ycsb_workload.distribution = DIST_UNIFORM;
+        is_ycsb = 1;
+        is_ycsb_single_thread = 0;
+    } else if (!strcmp(benchmark_name, "mt-ycsb-d-zipf")) {
+        ycsb_exp_name = "mt-ycsb-d-zipf CuckooTrie";
+        ycsb_workload = YCSB_D_SPEC;
+        ycsb_workload.distribution = DIST_ZIPF;
+        is_ycsb = 1;
+        is_ycsb_single_thread = 0;
+    } else if (!strcmp(benchmark_name, "mt-ycsb-e-zipf")) {
+        ycsb_exp_name = "mt-ycsb-e-zipf CuckooTrie";
+        ycsb_workload = YCSB_E_SPEC;
+        ycsb_workload.distribution = DIST_ZIPF;
+        is_ycsb = 1;
+        is_ycsb_single_thread = 0;
+    } else if (!strcmp(benchmark_name, "mt-ycsb-e-uniform")) {
+        ycsb_exp_name = "mt-ycsb-e-uniform CuckooTrie";
+        ycsb_workload = YCSB_E_SPEC;
+        ycsb_workload.distribution = DIST_UNIFORM;
+        is_ycsb = 1;
+        is_ycsb_single_thread = 0;
+    }else if (!strcmp(benchmark_name, "mt-ycsb-f-zipf")) {
+        ycsb_exp_name = "mt-ycsb-f-zipf CuckooTrie";
+        ycsb_workload = YCSB_F_SPEC;
+        ycsb_workload.distribution = DIST_ZIPF;
+        is_ycsb = 1;
+        is_ycsb_single_thread = 0;
+    } else if (!strcmp(benchmark_name, "mt-ycsb-f-uniform")) {
+        ycsb_exp_name = "mt-ycsb-f-uniform CuckooTrie";
+        ycsb_workload = YCSB_F_SPEC;
+        ycsb_workload.distribution = DIST_UNIFORM;
+        is_ycsb = 1;
         is_ycsb_single_thread = 0;
     } else {
         printf("Unknown benchmark name\n");
