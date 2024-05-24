@@ -1291,7 +1291,6 @@ int main(int argc, char **argv) {
     int num_threads = DEFAULT_NUM_THREADS;
     uint64_t dataset_size = DATASET_ALL_KEYS;
     uint64_t trie_cells = TRIE_CELLS_AUTO;
-    int use_uniform_dist = 0;
     uint64_t total_ycsb_ops = WORKLOAD_SIZE_DYNAMIC;
     ycsb_workload_spec ycsb_workload;
     int is_ycsb_single_thread = 0;
@@ -1320,8 +1319,6 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i], "--total-num-ops")) {
             total_ycsb_ops = strtoull(argv[i + 1], NULL, 0);
             i++;
-        } else if (!strcmp(argv[i], "--ycsb-uniform-dist")) {
-            use_uniform_dist = 1;
         } else if (!strcmp(argv[i], "--dataset-size")) {
             dataset_size = strtoull(argv[i + 1], NULL, 0);
             i++;
@@ -1543,8 +1540,6 @@ int main(int argc, char **argv) {
     }
     if (is_ycsb) {
         // Handle YCSB benchmarks
-        if (use_uniform_dist)
-            ycsb_workload.distribution = YCSB_UNIFORM;
 
         if (total_ycsb_ops != WORKLOAD_SIZE_DYNAMIC) {
             // Don't scale the total workload size based on number of threads
