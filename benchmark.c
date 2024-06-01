@@ -201,7 +201,7 @@ int insert_kvs(cuckoo_trie *trie, uint8_t *kvs_buf, uint64_t num_kvs) {
     uint64_t i;
     int result;
     uint8_t *buf_pos = kvs_buf;
-
+    printf("Loading %d keys...\n", (int) num_kvs);
     for (i = 0; i < num_kvs; i++) {
         ct_kv *kv = (ct_kv *) buf_pos;
         result = ct_insert(trie, kv);
