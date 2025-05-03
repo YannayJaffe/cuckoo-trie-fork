@@ -216,7 +216,8 @@ void bench_delete(char *dataset_name, uint64_t trie_size) {
     printf("Error: delete not supported in CuckooTrie");
 }
 
-uint8_t *sample_keys(ct_kv **kv_pointers, uint64_t num_kvs, uint64_t sample_size, int false_queries, uint64_t* thread_rand_state) {
+uint8_t *sample_keys(ct_kv **kv_pointers, uint64_t num_kvs, uint64_t sample_size, int false_queries,
+                     uint64_t *thread_rand_state) {
     uint64_t i;
     dynamic_buffer_t buf;
 
@@ -225,7 +226,7 @@ uint8_t *sample_keys(ct_kv **kv_pointers, uint64_t num_kvs, uint64_t sample_size
     for (i = 0; i < sample_size; i++) {
         uint64_t key_idx;
         uint64_t rand_num;
-        if(thread_rand_state == NULL){
+        if (thread_rand_state == NULL) {
             rand_num = rand_uint64();
         } else {
             rand_num = rand_uint64_r(thread_rand_state);
@@ -391,7 +392,7 @@ void *insert_thread(void *context) {
     return NULL;
 }
 
-struct prepare_lookups_workloads_context{
+struct prepare_lookups_workloads_context {
     lookup_thread_ctx *out_ctx;
     ct_kv **kvs;
     uint64_t num_keys;
@@ -400,10 +401,11 @@ struct prepare_lookups_workloads_context{
     int thread_id;
 };
 
-void* prepare_lookup_workloads_thread(void* arg) {
-    struct prepare_lookups_workloads_context* ctx = (struct prepare_lookups_workloads_context*)arg;
+void *prepare_lookup_workloads_thread(void *arg) {
+    struct prepare_lookups_workloads_context *ctx = (struct prepare_lookups_workloads_context *) arg;
     uint64_t thread_rand_state = seed_from_time_r(ctx->thread_id);
-    ctx->out_ctx->target_keys = sample_keys(ctx->kvs, ctx->num_keys, ctx->num_lookups, ctx->false_queries, &thread_rand_state);
+    ctx->out_ctx->target_keys = sample_keys(ctx->kvs, ctx->num_keys, ctx->num_lookups, ctx->false_queries,
+                                            &thread_rand_state);
     ctx->out_ctx->num_keys = ctx->num_lookups;
     return NULL;
 }
@@ -447,7 +449,8 @@ void bench_mt_pos_lookup(char *dataset_name, uint64_t trie_size, int num_threads
         prepare_contexts[i].out_ctx = ctx;
         prepare_contexts[i].thread_id = i;
     }
-    run_multiple_threads(prepare_lookup_workloads_thread, num_threads, prepare_contexts, sizeof(struct prepare_lookups_workloads_context));
+    run_multiple_threads(prepare_lookup_workloads_thread, num_threads, prepare_contexts,
+                         sizeof(struct prepare_lookups_workloads_context));
 
     notify_critical_section_start();
     timer_start(&timer);
@@ -744,9 +747,16 @@ float load_factor(cuckoo_trie *trie) {
     return ((float) used_cells) / total_cells;
 }
 
-int kvs_fit_in_trie(uint8_t *kvs_buf, uint64_t num_kvs, uint64_t trie_size) {
+struct kvs_fit_result {
+    int result;
+    float load_factor;
+};
+
+
+struct kvs_fit_result kvs_fit_in_trie(uint8_t *kvs_buf, uint64_t num_kvs, uint64_t trie_size) {
     uint64_t i;
     int result;
+    struct kvs_fit_result test_result;
     cuckoo_trie *trie;
     uint8_t *buf_pos;
 
@@ -755,7 +765,9 @@ int kvs_fit_in_trie(uint8_t *kvs_buf, uint64_t num_kvs, uint64_t trie_size) {
     trie = ct_alloc(trie_size);
     if (trie == NULL) {
         printf("Couldn't allocate trie\n");
-        return -1;
+        test_result.result = -1;
+        test_result.load_factor = 0;
+        return test_result;
     }
 
     buf_pos = kvs_buf;
@@ -763,58 +775,82 @@ int kvs_fit_in_trie(uint8_t *kvs_buf, uint64_t num_kvs, uint64_t trie_size) {
         ct_kv *kv = (ct_kv *) buf_pos;
         result = ct_insert(trie, kv);
         if (result == S_OVERFLOW) {
-            printf("Overflow (Load factor %.1f%%)\n", load_factor(trie) * 100);
+            float load_factor_value = load_factor(trie) * 100;
+            printf("Overflow (Load factor %.1f%%)\n", load_factor_value);
             ct_free(trie);
-            return 0;
+            test_result.result = 0;
+            test_result.load_factor = load_factor_value;
+            return test_result;
         }
         if (result != S_OK && result != S_ALREADYIN) {
             printf("Insertion error %d\n", result);
             ct_free(trie);
-            return -1;
+            test_result.result = -1;
+            test_result.load_factor = 0;
+            return test_result;
         }
         buf_pos += kv_size(kv);
     }
-    printf("OK (Load factor %.1f%%)\n", load_factor(trie) * 100);
+    float load_factor_value = load_factor(trie) * 100;
+    printf("OK (Load factor %.1f%%)\n", load_factor_value);
     ct_free(trie);
-    return 1;
+    test_result.result = 1;
+    test_result.load_factor = load_factor_value;
+    return test_result;
 }
 
 // Meause the trie size required for the dataset. As resizing isn't currently supported,
 // we binary-search over different sizes until we arrive at the minimal size that works.
 void bench_mem_usage(dataset_t *dataset) {
-    int result;
+    struct kvs_fit_result result;
     uint64_t step;
-    uint64_t size = 8192;
+    // running few tests shows that it's roughly 1.3-1.4 cells per key
+    // we'll start with an estimate of 0.8 cells per key
+    uint64_t size = 4 * dataset->num_keys / 5;
 
     build_kvs(dataset, 0);
 
     while (1) {
         result = kvs_fit_in_trie(dataset->kvs, dataset->num_keys, size);
-        if (result == -1)
+        if (result.result == -1) {
             return;
-        if (result == 1)
+        }
+        if (result.result == 1) {
+            // succeeded - can stop
             break;
-        size *= 2;
+        }
+        size *= 2; // failed - need bigger size
     }
 
     // We know that <size> is large enough, and <size>/2 is too small, so the
     // next size to try is <size>-<size>/4
-    step = size / 8;
-    size -= size / 4;
-    while (step > size / 1000) {
-        result = kvs_fit_in_trie(dataset->kvs, dataset->num_keys, size);
-        if (result == -1)
-            return;
-        if (result == 1)
-            size -= step;
-        else
-            size += step;
-        step /= 2;
+    // if we reach load factor > 95% it's ok to stop for this estimation
+    if (result.load_factor <= 95.0f) {
+        step = size / 8;
+        size -= size / 4;
+        while (step > size / 1000) {
+            result = kvs_fit_in_trie(dataset->kvs, dataset->num_keys, size);
+            if (result.result == -1) {
+                return;
+            }
+            if (result.result == 1 && result.load_factor > 95.0f) {
+                // if succeeded but the load factor is more than 95% stop here
+                break;
+            } else if (result.result == 1) {
+                // succeeded but the load factor is small - so try smaller size
+                size -= step;
+            } else {
+                // failed - need bigger size
+                size += step;
+            }
+            step /= 2;
+        }
     }
+
 
     uint64_t index_overhead_bytes = ct_size_bytes(size);
 
-    float bytes_per_key = (float)index_overhead_bytes / dataset->num_keys;
+    float bytes_per_key = (float) index_overhead_bytes / dataset->num_keys;
     printf("Minimal trie size is about %lu cells (%.2f cells / key, %.1fb/key)\n", size,
            ((float) size) / dataset->num_keys, bytes_per_key);
     printf("RESULT: keys=%lu bytes=%lu\n", dataset->num_keys, index_overhead_bytes);
@@ -874,11 +910,11 @@ typedef struct ycsb_thread_ctx_t {
     ycsb_workload workload;
 } ycsb_thread_ctx;
 
-int choose_ycsb_op_type(const float *op_probs, uint64_t* random_state) {
+int choose_ycsb_op_type(const float *op_probs, uint64_t *random_state) {
     uint64_t i;
     float sum = 0.0;
     float rand;
-    if(random_state == NULL){
+    if (random_state == NULL) {
         rand = rand_float();
     } else {
         rand = rand_float_r(random_state);
@@ -1056,7 +1092,7 @@ void *ycsb_thread(void *arg) {
 
 int generate_ycsb_workload(dataset_t *dataset, ycsb_workload *workload,
                            const ycsb_workload_spec *spec, int thread_id,
-                           int num_threads, uint64_t* random_state) {
+                           int num_threads, uint64_t *random_state) {
     uint64_t i;
     int data_size;
     ct_kv *kv;
@@ -1216,26 +1252,29 @@ struct prepare_mt_ycsb_workload_context {
     int thread_id;
 };
 
-void* generate_ycsb_workload_wrapper(void* arg){
-    struct prepare_mt_ycsb_workload_context *ctx = (struct prepare_mt_ycsb_workload_context *)arg;
-    if(!generate_ycsb_workload(ctx->dataset, ctx->workload, ctx->spec, ctx->thread_id, ctx->num_threads, ctx->random_state)){
+void *generate_ycsb_workload_wrapper(void *arg) {
+    struct prepare_mt_ycsb_workload_context *ctx = (struct prepare_mt_ycsb_workload_context *) arg;
+    if (!generate_ycsb_workload(ctx->dataset, ctx->workload, ctx->spec, ctx->thread_id, ctx->num_threads,
+                                ctx->random_state)) {
         printf("Error: failed to generate the ycsb workload!\n");
         exit(1);
     }
     return NULL;
 }
 
-void generate_mt_ycsb_workload(ycsb_thread_ctx *benchmark_inner_thread_contexts, dataset_t* dataset, const ycsb_workload_spec *spec, int num_threads){
+void generate_mt_ycsb_workload(ycsb_thread_ctx *benchmark_inner_thread_contexts, dataset_t *dataset,
+                               const ycsb_workload_spec *spec, int num_threads) {
     struct prepare_mt_ycsb_workload_context prepare_workload_inner_contexts[num_threads];
-    for (int i=0; i<num_threads; i++){
+    for (int i = 0; i < num_threads; i++) {
         prepare_workload_inner_contexts[i].dataset = dataset;
         prepare_workload_inner_contexts[i].workload = &(benchmark_inner_thread_contexts[i].workload);
         prepare_workload_inner_contexts[i].spec = spec;
         prepare_workload_inner_contexts[i].random_state = &(benchmark_inner_thread_contexts[i].random_state);
-        prepare_workload_inner_contexts[i].thread_id = (int)benchmark_inner_thread_contexts[i].thread_id;
+        prepare_workload_inner_contexts[i].thread_id = (int) benchmark_inner_thread_contexts[i].thread_id;
         prepare_workload_inner_contexts[i].num_threads = num_threads;
     }
-    run_multiple_threads(generate_ycsb_workload_wrapper, num_threads, prepare_workload_inner_contexts, sizeof(prepare_workload_inner_contexts[0]));
+    run_multiple_threads(generate_ycsb_workload_wrapper, num_threads, prepare_workload_inner_contexts,
+                         sizeof(prepare_workload_inner_contexts[0]));
 }
 
 void bench_ycsb(char *dataset_name, uint64_t trie_size, const ycsb_workload_spec *base_spec, int num_threads,
@@ -1362,7 +1401,7 @@ int main(int argc, char **argv) {
     } else if (!strcmp(benchmark_name, "mt-neg-lookup")) {
         bench_mt_pos_lookup(dataset_name, trie_cells, num_threads, 1);
         return 0;
-    }else if (!strcmp(benchmark_name, "mw-insert-pos-lookup")) {
+    } else if (!strcmp(benchmark_name, "mw-insert-pos-lookup")) {
         bench_mw_insert_pos_lookup(dataset_name, trie_cells, num_insert_threads, num_lookup_threads);
         return 0;
     } else if (!strcmp(benchmark_name, "range-read")) {
@@ -1524,7 +1563,7 @@ int main(int argc, char **argv) {
         ycsb_workload.distribution = DIST_UNIFORM;
         is_ycsb = 1;
         is_ycsb_single_thread = 0;
-    }else if (!strcmp(benchmark_name, "mt-ycsb-f-zipf")) {
+    } else if (!strcmp(benchmark_name, "mt-ycsb-f-zipf")) {
         ycsb_exp_name = "mt-ycsb-f-zipf CuckooTrie";
         ycsb_workload = YCSB_F_SPEC;
         ycsb_workload.distribution = DIST_ZIPF;
