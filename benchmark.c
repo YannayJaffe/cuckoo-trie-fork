@@ -784,7 +784,7 @@ int kvs_fit_in_trie(uint8_t *kvs_buf, uint64_t num_kvs, uint64_t trie_size) {
 void bench_mem_usage(dataset_t *dataset) {
     int result;
     uint64_t step;
-    uint64_t size = 10000;
+    uint64_t size = 8192;
 
     build_kvs(dataset, 0);
 
@@ -812,10 +812,12 @@ void bench_mem_usage(dataset_t *dataset) {
         step /= 2;
     }
 
-    float bytes_per_key = (((float) size) / CUCKOO_BUCKET_SIZE) * sizeof(ct_bucket) / dataset->num_keys;
+    uint64_t index_overhead_bytes = ct_size_bytes(size);
+
+    float bytes_per_key = (float)index_overhead_bytes / dataset->num_keys;
     printf("Minimal trie size is about %lu cells (%.2f cells / key, %.1fb/key)\n", size,
            ((float) size) / dataset->num_keys, bytes_per_key);
-    printf("RESULT: keys=%lu bytes=%lu\n", dataset->num_keys, size * sizeof(ct_bucket) / CUCKOO_BUCKET_SIZE);
+    printf("RESULT: keys=%lu bytes=%lu\n", dataset->num_keys, index_overhead_bytes);
 }
 
 #define YCSB_READ 0

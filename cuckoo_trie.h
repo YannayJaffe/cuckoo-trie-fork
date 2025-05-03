@@ -38,5 +38,6 @@ EXPORT void ct_mtdbg_register_thread(pthread_t thread_id);
 EXPORT void ct_mtdbg_set_enabled(int enabled);
 EXPORT void ct_mtdbg_thread_done();
 EXPORT void ct_mtdbg_seed(uint64_t seed);
+EXPORT uint64_t ct_size_bytes(uint64_t num_cells);
 
 #endif

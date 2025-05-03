@@ -2271,6 +2271,21 @@ cuckoo_trie* ct_alloc(uint64_t num_cells) {
 	return result;
 }
 
+uint64_t ct_size_bytes(uint64_t num_cells){
+    uint64_t num_buckets = (num_cells + CUCKOO_BUCKET_SIZE - 1) / CUCKOO_BUCKET_SIZE;
+
+    // Make num_buckets a multiple of FANOUT*2 s.t. xor-ing a symbol (which is in the range
+    // 0 .. FANOUT, inclusive) won't make a bucket number invalid.
+    num_buckets = (num_buckets + (FANOUT*2) - 1) / (FANOUT*2) * (FANOUT*2);
+
+    uint64_t buckets_to_alloc = num_buckets + 1;  // Add space for the min_leaf bucket
+
+    uint64_t buckets_pages = (buckets_to_alloc * sizeof(ct_bucket)) / HUGEPAGE_SIZE + 1;
+
+    return buckets_pages * HUGEPAGE_SIZE + sizeof(cuckoo_trie); // the huge pages + malloc size from ct_alloc
+}
+
+
 void ct_free(cuckoo_trie* trie) {
 	uint64_t buckets_pages = (trie->num_buckets * sizeof(ct_bucket)) / HUGEPAGE_SIZE + 1;
 	munmap(trie->buckets, buckets_pages * HUGEPAGE_SIZE);
